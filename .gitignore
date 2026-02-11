@@ -63,7 +63,7 @@ configs/devA.conf
 configs/devB.conf
 
 # Local CA copy (keep private)
-certs/ca.crt
+certs/ca_local.crt
 
 # Zephyr / nRF build outputs
 build/

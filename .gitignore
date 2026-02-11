@@ -53,3 +53,19 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# ===============================
+# LR Pair Project (Secrets/Build)
+# ===============================
+
+# Device secrets (DO NOT COMMIT)
+configs/devA.conf
+configs/devB.conf
+
+# Local CA copy (keep private)
+certs/ca.crt
+
+# Zephyr / nRF build outputs
+build/
+build-*/
+.vscode/

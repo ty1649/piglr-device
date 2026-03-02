@@ -14,19 +14,20 @@
 #include <nrf_modem_at.h>
 #include <modem/lte_lc.h>
 #include <net/mqtt_helper.h>
+#include <date_time.h>
 
 /* STEP 2.5 - Include the header for the Modem Key Management library */
 #include <modem/modem_key_mgmt.h>
 LOG_MODULE_REGISTER(Lesson4_Exercise2, LOG_LEVEL_INF);
 
-#define LED1_ON_CMD       "LED1ON"
-#define LED1_OFF_CMD      "LED1OFF"
-#define LED2_ON_CMD       "LED2ON"
-#define LED2_OFF_CMD      "LED2OFF"
-#define BUTTON_MSG        "Hi from nRF9151 SiP"
+#define LED1_ON_CMD "LED1ON"
+#define LED1_OFF_CMD "LED1OFF"
+#define LED2_ON_CMD "LED2ON"
+#define LED2_OFF_CMD "LED2OFF"
+#define BUTTON_MSG "Hi from nRF9151 SiP"
 #define SUBSCRIBE_TOPIC_ID 1234
 
-#define IMEI_LEN	15
+#define IMEI_LEN 15
 #define CGSN_RESPONSE_LENGTH (IMEI_LEN + 6 + 1) /* Add 6 for \r\nOK\r\n and 1 for \0 */
 #define CLIENT_ID_LEN sizeof("nrf-") + IMEI_LEN /* \0 included in sizeof() statement */
 
@@ -41,335 +42,368 @@ static const unsigned char ca_certificate[] = {
 
 static void lte_handler(const struct lte_lc_evt *const evt)
 {
-     switch (evt->type) {
-     case LTE_LC_EVT_NW_REG_STATUS:
+    switch (evt->type) {
+    case LTE_LC_EVT_NW_REG_STATUS:
         if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
             (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
             break;
         }
-		LOG_INF("Network registration status: %s",
-				evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
-				"Connected - home network" : "Connected - roaming");
-		k_sem_give(&lte_connected);
+        LOG_INF("Network registration status: %s",
+                evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
+                "Connected - home network" : "Connected - roaming");
+        k_sem_give(&lte_connected);
         break;
-	case LTE_LC_EVT_RRC_UPDATE:
-		LOG_INF("RRC mode: %s", evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
-				"Connected" : "Idle");
-		break;
-     default:
-             break;
-     }
+    case LTE_LC_EVT_RRC_UPDATE:
+        LOG_INF("RRC mode: %s", evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
+                "Connected" : "Idle");
+        break;
+    default:
+        break;
+    }
 }
 
 /* STEP 6 - Store the certificates to the modem */
 int certificate_provision(void)
 {
-	int err = 0;
-	bool exists;
+    int err = 0;
+    bool exists;
 
-	err = modem_key_mgmt_exists(CONFIG_MQTT_HELPER_SEC_TAG,
-				    MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-				    &exists);
-	if (err) {
-		LOG_ERR("Failed to check for certificates err %d\n", err);
-		return err;
-	}
+    err = modem_key_mgmt_exists(CONFIG_MQTT_HELPER_SEC_TAG,
+                    MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+                    &exists);
+    if (err) {
+        LOG_ERR("Failed to check for certificates err %d\n", err);
+        return err;
+    }
 
-	if (exists) {
-		err = modem_key_mgmt_cmp(CONFIG_MQTT_HELPER_SEC_TAG,
-					 MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-				   	ca_certificate,
-				   	sizeof(ca_certificate) - 1);
-		LOG_INF("Comparing credentials: %s", err ? "Mismatch" : "Match");
-		if (!err) {
-			return 0;
-		}
-	}
+    if (exists) {
+        err = modem_key_mgmt_cmp(CONFIG_MQTT_HELPER_SEC_TAG,
+                     MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+                    ca_certificate,
+                    sizeof(ca_certificate) - 1);
+        LOG_INF("Comparing credentials: %s", err ? "Mismatch" : "Match");
+        if (!err) {
+            return 0;
+        }
+    }
 
-	err = modem_key_mgmt_write(CONFIG_MQTT_HELPER_SEC_TAG,
-				   MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-				   ca_certificate,
-				   sizeof(ca_certificate) - 1);
-	if (err) {
-		LOG_ERR("Failed to provision CA certificate: %d", err);
-		return err;
-	}
+    err = modem_key_mgmt_write(CONFIG_MQTT_HELPER_SEC_TAG,
+                   MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+                   ca_certificate,
+                   sizeof(ca_certificate) - 1);
+    if (err) {
+        LOG_ERR("Failed to provision CA certificate: %d", err);
+        return err;
+    }
 
-	return err;
+    return err;
 }
+
 static int modem_configure(void)
 {
-	int err;
+    int err;
 
-	LOG_INF("Initializing modem library");
-	err = nrf_modem_lib_init();
-	if (err) {
-		LOG_ERR("Failed to initialize the modem library, error: %d", err);
-		return err;
-	}
+    LOG_INF("Initializing modem library");
+    err = nrf_modem_lib_init();
+    if (err) {
+        LOG_ERR("Failed to initialize the modem library, error: %d", err);
+        return err;
+    }
 
-	/* STEP 7 - Store the certificate in the modem while the modem is in offline mode  */
-	err = certificate_provision();
-	if (err) {
-		LOG_ERR("Failed to provision certificates");
-		return err;
-	}
+    /* STEP 7 - Store the certificate in the modem while the modem is in offline mode  */
+    err = certificate_provision();
+    if (err) {
+        LOG_ERR("Failed to provision certificates");
+        return err;
+    }
 
-	LOG_INF("Connecting to LTE network");
-	err = lte_lc_connect_async(lte_handler);
-	if (err) {
-		LOG_ERR("Error in lte_lc_connect_async, error: %d", err);
-		return err;
-	}
+    LOG_INF("Connecting to LTE network");
+    err = lte_lc_connect_async(lte_handler);
+    if (err) {
+        LOG_ERR("Error in lte_lc_connect_async, error: %d", err);
+        return err;
+    }
 
-	k_sem_take(&lte_connected, K_FOREVER);
-	LOG_INF("Connected to LTE network");
-	dk_set_led_on(DK_LED2);
+    k_sem_take(&lte_connected, K_FOREVER);
+    LOG_INF("Connected to LTE network");
+    dk_set_led_on(DK_LED2);
 
-	return 0;
+    return 0;
 }
 
 static int client_id_get(char * buffer, size_t buffer_len)
 {
-	int len;
-	int err;
-	char imei_buf[CGSN_RESPONSE_LENGTH];
+    int len;
+    int err;
+    char imei_buf[CGSN_RESPONSE_LENGTH];
 
-	if (!buffer || buffer_len == 0) {
-		LOG_ERR("Invalid buffer parameters");
-		return -EINVAL;
-	}
+    if (!buffer || buffer_len == 0) {
+        LOG_ERR("Invalid buffer parameters");
+        return -EINVAL;
+    }
 
-	if (strlen(CONFIG_MQTT_SAMPLE_CLIENT_ID) > 0) {
-		len = snprintk(buffer, buffer_len, "%s",
-			 CONFIG_MQTT_SAMPLE_CLIENT_ID);
-	if ((len < 0) || (len >= buffer_len)) {
-		LOG_ERR("Failed to format client ID from config, error: %d", len);
-		return -EMSGSIZE;
-	}
-	LOG_DBG("client_id = %s", buffer);
-	return 0;
-	}
+    if (strlen(CONFIG_MQTT_SAMPLE_CLIENT_ID) > 0) {
+        len = snprintk(buffer, buffer_len, "%s",
+             CONFIG_MQTT_SAMPLE_CLIENT_ID);
+        if ((len < 0) || (len >= buffer_len)) {
+            LOG_ERR("Failed to format client ID from config, error: %d", len);
+            return -EMSGSIZE;
+        }
+        LOG_DBG("client_id = %s", buffer);
+        return 0;
+    }
 
-	err = nrf_modem_at_cmd(imei_buf, sizeof(imei_buf), "AT+CGSN");
-	if (err) {
-		LOG_ERR("Failed to obtain IMEI, error: %d", err);
-		return err;
-	}
+    err = nrf_modem_at_cmd(imei_buf, sizeof(imei_buf), "AT+CGSN");
+    if (err) {
+        LOG_ERR("Failed to obtain IMEI, error: %d", err);
+        return err;
+    }
 
-	/* Validate IMEI length before null termination */
-	if (IMEI_LEN >= sizeof(imei_buf)) {
-		LOG_ERR("IMEI_LEN exceeds buffer size");
-		return -EINVAL;
-	}
+    /* Validate IMEI length before null termination */
+    if (IMEI_LEN >= sizeof(imei_buf)) {
+        LOG_ERR("IMEI_LEN exceeds buffer size");
+        return -EINVAL;
+    }
 
-	imei_buf[IMEI_LEN] = '\0';
+    imei_buf[IMEI_LEN] = '\0';
 
-	len = snprintk(buffer, buffer_len, "nrf-%.*s", IMEI_LEN, imei_buf);
-	if ((len < 0) || (len >= buffer_len)) {
-		LOG_ERR("Failed to format client ID from IMEI, error: %d", len);
-		return -EMSGSIZE;
-	}
+    len = snprintk(buffer, buffer_len, "nrf-%.*s", IMEI_LEN, imei_buf);
+    if ((len < 0) || (len >= buffer_len)) {
+        LOG_ERR("Failed to format client ID from IMEI, error: %d", len);
+        return -EMSGSIZE;
+    }
 
-	LOG_DBG("client_id = %s", buffer);
+    LOG_DBG("client_id = %s", buffer);
 
-	return 0;
+    return 0;
 }
 
 static void subscribe(void)
 {
-	int err;
+    int err;
 
-	struct mqtt_topic subscribe_topic = {
-		.topic = {
-			.utf8 = CONFIG_MQTT_SAMPLE_SUB_TOPIC, 
-			.size = strlen(CONFIG_MQTT_SAMPLE_SUB_TOPIC)
-		},
-		.qos = MQTT_QOS_1_AT_LEAST_ONCE};
+    struct mqtt_topic subscribe_topic = {
+        .topic = {
+            .utf8 = CONFIG_MQTT_SAMPLE_SUB_TOPIC, 
+            .size = strlen(CONFIG_MQTT_SAMPLE_SUB_TOPIC)
+        },
+        .qos = MQTT_QOS_1_AT_LEAST_ONCE};
 
-	struct mqtt_subscription_list subscription_list = {
-		.list = &subscribe_topic,
-		.list_count = 1,
-		.message_id = SUBSCRIBE_TOPIC_ID};
+    struct mqtt_subscription_list subscription_list = {
+        .list = &subscribe_topic,
+        .list_count = 1,
+        .message_id = SUBSCRIBE_TOPIC_ID};
 
-	LOG_INF("Subscribing to %s", CONFIG_MQTT_SAMPLE_SUB_TOPIC);
-	err = mqtt_helper_subscribe(&subscription_list);
-	if (err) {
-		LOG_ERR("Failed to subscribe to topics, error: %d", err);
-		return;
-	}
+    LOG_INF("Subscribing to %s", CONFIG_MQTT_SAMPLE_SUB_TOPIC);
+    err = mqtt_helper_subscribe(&subscription_list);
+    if (err) {
+        LOG_ERR("Failed to subscribe to topics, error: %d", err);
+        return;
+    }
 }
 
 static int publish(uint8_t *data, size_t len)
 {
-	int err;
-	struct mqtt_publish_param mqtt_param;
+    int err;
+    struct mqtt_publish_param mqtt_param;
 
-	mqtt_param.message.payload.data = data;
-	mqtt_param.message.payload.len = len;
-	mqtt_param.message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE;
-	mqtt_param.message_id = mqtt_helper_msg_id_get(),
-	mqtt_param.message.topic.topic.utf8 = CONFIG_MQTT_SAMPLE_PUB_TOPIC;
-	mqtt_param.message.topic.topic.size = strlen(CONFIG_MQTT_SAMPLE_PUB_TOPIC);
-	mqtt_param.dup_flag = 0;
-	mqtt_param.retain_flag = 0;
+    mqtt_param.message.payload.data = data;
+    mqtt_param.message.payload.len = len;
+    mqtt_param.message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE;
+    mqtt_param.message_id = mqtt_helper_msg_id_get(),
+    mqtt_param.message.topic.topic.utf8 = CONFIG_MQTT_SAMPLE_PUB_TOPIC;
+    mqtt_param.message.topic.topic.size = strlen(CONFIG_MQTT_SAMPLE_PUB_TOPIC);
+    mqtt_param.dup_flag = 0;
+    mqtt_param.retain_flag = 0;
 
-	err = mqtt_helper_publish(&mqtt_param);
-	if (err) {
-		LOG_WRN("Failed to send payload, err: %d", err);
-		return err;
-	}
+    err = mqtt_helper_publish(&mqtt_param);
+    if (err) {
+        LOG_WRN("Failed to send payload, err: %d", err);
+        return err;
+    }
 
-	LOG_INF("Published message: \"%.*s\" on topic: \"%.*s\"", mqtt_param.message.payload.len,
-								  mqtt_param.message.payload.data,
-								  mqtt_param.message.topic.topic.size,
-								  mqtt_param.message.topic.topic.utf8);
-	return 0;
+    LOG_INF("Published message: \"%.*s\" on topic: \"%.*s\"", mqtt_param.message.payload.len,
+                                  mqtt_param.message.payload.data,
+                                  mqtt_param.message.topic.topic.size,
+                                  mqtt_param.message.topic.topic.utf8);
+    return 0;
 }
 
 static void on_mqtt_connack(enum mqtt_conn_return_code return_code, bool session_present)
 {
-	ARG_UNUSED(session_present);
+    ARG_UNUSED(session_present);
 
-	if (return_code == MQTT_CONNECTION_ACCEPTED) {
-		LOG_INF("Connected to MQTT broker");
-		LOG_INF("Hostname: %s", CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME);
-		LOG_INF("Client ID: %s", (char *)client_id);
-		LOG_INF("Port: %d", CONFIG_MQTT_HELPER_PORT);
-		LOG_INF("TLS: %s", IS_ENABLED(CONFIG_MQTT_LIB_TLS) ? "Yes" : "No");
-		subscribe();
-	} else {
-		LOG_WRN("Connection to broker not established, return_code: %d", return_code);
-	}
+    if (return_code == MQTT_CONNECTION_ACCEPTED) {
+        LOG_INF("Connected to MQTT broker");
+        LOG_INF("Hostname: %s", CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME);
+        LOG_INF("Client ID: %s", (char *)client_id);
+        LOG_INF("Port: %d", CONFIG_MQTT_HELPER_PORT);
+        LOG_INF("TLS: %s", IS_ENABLED(CONFIG_MQTT_LIB_TLS) ? "Yes" : "No");
+        subscribe();
 
+        uint8_t msg[] = "{\"fw\":\"bringup\",\"dev\":\"A\",\"ok\":true}";
+        publish(msg, sizeof(msg) - 1);
+    } else {
+        LOG_WRN("Connection to broker not established, return_code: %d", return_code);
+    }
 }
 
 static void on_mqtt_suback(uint16_t message_id, int result)
-{	
-	if (result != MQTT_SUBACK_FAILURE) {
-		if (message_id == SUBSCRIBE_TOPIC_ID) {
-			LOG_INF("Subscribed to %s with QoS %d", CONFIG_MQTT_SAMPLE_SUB_TOPIC, result);
-			return;
-		}
-		LOG_WRN("Subscribed to unknown topic, id: %d with QoS %d", message_id, result);
-		return;
-	}
-	LOG_ERR("Topic subscription failed, error: %d", result);
+{   
+    if (result != MQTT_SUBACK_FAILURE) {
+        if (message_id == SUBSCRIBE_TOPIC_ID) {
+            LOG_INF("Subscribed to %s with QoS %d", CONFIG_MQTT_SAMPLE_SUB_TOPIC, result);
+            return;
+        }
+        LOG_WRN("Subscribed to unknown topic, id: %d with QoS %d", message_id, result);
+        return;
+    }
+    LOG_ERR("Topic subscription failed, error: %d", result);
 }
 
 static void on_mqtt_publish(struct mqtt_helper_buf topic, struct mqtt_helper_buf payload)
 {
-	int err; 
+    int err; 
 
-	LOG_INF("Received payload: %.*s on topic: %.*s", payload.size,
-							 payload.ptr,
-							 topic.size,
-							 topic.ptr);
-	
-	if (strncmp(payload.ptr, LED1_ON_CMD,
-			    sizeof(LED1_ON_CMD) - 1) == 0) {
-				err = dk_set_led_on(DK_LED1);
-				if (err) {
-					LOG_ERR("Failed to set LED %d on, error: %d", DK_LED1, err);
-					return;
-				}
-	} else if (strncmp(payload.ptr, LED1_OFF_CMD,
-			   sizeof(LED1_OFF_CMD) - 1) == 0) {
-				err = dk_set_led_off(DK_LED1);
-				if (err) {
-					LOG_ERR("Failed to set LED %d off, error: %d", DK_LED1, err);
-					return;
-				}
-	} else if (strncmp(payload.ptr, LED2_ON_CMD,
-			   sizeof(LED2_ON_CMD) - 1) == 0) {
-				err = dk_set_led_on(DK_LED2);
-				if (err) {
-					LOG_ERR("Failed to set LED %d on, error: %d", DK_LED2, err);
-					return;
-				}
-	} else if (strncmp(payload.ptr, LED2_OFF_CMD,
-			   sizeof(LED2_OFF_CMD) - 1) == 0) {
-				err = dk_set_led_off(DK_LED2);
-				if (err) {
-					LOG_ERR("Failed to set LED %d off, error: %d", DK_LED2, err);
-					return;
-				}
-	}
+    LOG_INF("Received payload: %.*s on topic: %.*s", payload.size,
+                             payload.ptr,
+                             topic.size,
+                             topic.ptr);
+    
+    if (strncmp(payload.ptr, LED1_ON_CMD,
+                sizeof(LED1_ON_CMD) - 1) == 0) {
+                err = dk_set_led_on(DK_LED1);
+                if (err) {
+                    LOG_ERR("Failed to set LED %d on, error: %d", DK_LED1, err);
+                    return;
+                }
+    } else if (strncmp(payload.ptr, LED1_OFF_CMD,
+               sizeof(LED1_OFF_CMD) - 1) == 0) {
+                err = dk_set_led_off(DK_LED1);
+                if (err) {
+                    LOG_ERR("Failed to set LED %d off, error: %d", DK_LED1, err);
+                    return;
+                }
+    } else if (strncmp(payload.ptr, LED2_ON_CMD,
+               sizeof(LED2_ON_CMD) - 1) == 0) {
+                err = dk_set_led_on(DK_LED2);
+                if (err) {
+                    LOG_ERR("Failed to set LED %d on, error: %d", DK_LED2, err);
+                    return;
+                }
+    } else if (strncmp(payload.ptr, LED2_OFF_CMD,
+               sizeof(LED2_OFF_CMD) - 1) == 0) {
+                err = dk_set_led_off(DK_LED2);
+                if (err) {
+                    LOG_ERR("Failed to set LED %d off, error: %d", DK_LED2, err);
+                    return;
+                }
+    }
 }
 
 static void on_mqtt_disconnect(int result)
 {
-	LOG_INF("MQTT client disconnected: %d", result);
+    LOG_INF("MQTT client disconnected: %d", result);
 }
 
 static void button_handler(uint32_t button_state, uint32_t has_changed)
 {
-	switch (has_changed) {
-	case DK_BTN1_MSK:
-		if (button_state & DK_BTN1_MSK){
-			int err = publish(BUTTON_MSG, sizeof(BUTTON_MSG)-1);
-			if (err) {
-				LOG_INF("Failed to send message, %d", err);
-				return;
-			}
-		}
-		break;
-	}
+    switch (has_changed) {
+    case DK_BTN1_MSK:
+        if (button_state & DK_BTN1_MSK){
+            int err = publish(BUTTON_MSG, sizeof(BUTTON_MSG)-1);
+            if (err) {
+                LOG_INF("Failed to send message, %d", err);
+                return;
+            }
+        }
+        break;
+    }
 }
 
 int main(void)
 {
-	int err;
+    int err;
 
-	err = dk_leds_init();
-	if (err) {
-		LOG_ERR("Failed to initialize the LED library, error: %d", err);
-		return 0;
-	}
 
-	err = modem_configure();
-	if (err) {
-		LOG_ERR("Failed to configure the modem, error: %d", err);
-		return 0;
-	}
 
-	err = dk_buttons_init(button_handler);
-	if (err) {
-		LOG_ERR("Failed to initialize the buttons library, error: %d", err);
-		return 0;
-	}
+    err = dk_leds_init();
+    if (err) {
+        LOG_ERR("Failed to initialize the LED library, error: %d", err);
+        return 0;
+    }
 
-	struct mqtt_helper_cfg config = {
-		.cb = {
-			.on_connack = on_mqtt_connack,
-			.on_disconnect = on_mqtt_disconnect,
-			.on_publish = on_mqtt_publish,
-			.on_suback = on_mqtt_suback,
-		},
-	};
+    err = modem_configure();
+    if (err) {
+        LOG_ERR("Failed to configure the modem, error: %d", err);
+        return 0;
+    }
 
-	err = mqtt_helper_init(&config);
-	if (err) {
-		LOG_ERR("Failed to initialize MQTT helper, error: %d", err);
-		return 0;
-	}
+    err = dk_buttons_init(button_handler);
+    if (err) {
+        LOG_ERR("Failed to initialize the buttons library, error: %d", err);
+        return 0;
+    }
+    
+    /* --- 1. TIME SYNC WITH TIMEOUT --- */
+    LOG_INF("Waiting for network time to validate TLS certificate...");
+    for (int i = 0; i < 60; i++) {
+        if (date_time_is_valid()) {
+            LOG_INF("Time synced successfully!");
+            break;
+        }
+        k_sleep(K_MSEC(500));
+    }
 
-	err = client_id_get(client_id, sizeof(client_id));
+    if (!date_time_is_valid()) {
+        LOG_WRN("Failed to get network time! TLS handshake might fail with -111.");
+    }
+		char buf;
+nrf_modem_at_cmd(buf, sizeof(buf), "AT+CGMR");
+LOG_INF("Modem Firmware: %s", buf);
+
+    /* --- 2. MQTT INITIALIZATION --- */
+    struct mqtt_helper_cfg config = {
+        .cb = {
+            .on_connack = on_mqtt_connack,
+            .on_disconnect = on_mqtt_disconnect,
+            .on_publish = on_mqtt_publish,
+            .on_suback = on_mqtt_suback,
+        },
+    };
+
+    err = mqtt_helper_init(&config);
+    if (err) {
+        LOG_ERR("Failed to initialize MQTT helper, error: %d", err);
+        return 0;
+    }
+
+    err = client_id_get(client_id, sizeof(client_id));
     if (err) {
         LOG_ERR("Failed to get client ID, error: %d", err);
         return 0;
     }
 
-	struct mqtt_helper_conn_params conn_params = {
-		.hostname.ptr = CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME,
-		.hostname.size = strlen(CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME),
-		.device_id.ptr = (char *)client_id,
-		.device_id.size = strlen(client_id),
-	};
+    struct mqtt_helper_conn_params conn_params = {
+        .hostname.ptr = CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME,
+        .hostname.size = strlen(CONFIG_MQTT_SAMPLE_BROKER_HOSTNAME),
+        .device_id.ptr = (char *)client_id,
+        .device_id.size = strlen((char *)client_id),
 
-	err = mqtt_helper_connect(&conn_params);
-	if (err) {
-		LOG_ERR("Failed to connect to MQTT, error code: %d", err);
-		return 0;
-	}
+        .user_name.ptr = CONFIG_LR_MQTT_USERNAME,
+        .user_name.size = strlen(CONFIG_LR_MQTT_USERNAME),
+        .password.ptr = CONFIG_LR_MQTT_PASSWORD,
+        .password.size = strlen(CONFIG_LR_MQTT_PASSWORD),
+    };
+
+    err = mqtt_helper_connect(&conn_params);
+    if (err) {
+        LOG_ERR("Failed to connect to MQTT, error code: %d", err);
+        return 0;
+    }
+
+    LOG_INF("MQTT connection requested. Yielding main thread.");
+    
+    /* --- 3. KEEP THE THREAD ALIVE --- */
+    k_sleep(K_FOREVER);
 }

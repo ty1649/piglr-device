@@ -71,6 +71,7 @@ int certificate_provision(void)
     err = modem_key_mgmt_exists(CONFIG_MQTT_HELPER_SEC_TAG,
                     MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
                     &exists);
+                    
     if (err) {
         LOG_ERR("Failed to check for certificates err %d\n", err);
         return err;
@@ -80,7 +81,7 @@ int certificate_provision(void)
         err = modem_key_mgmt_cmp(CONFIG_MQTT_HELPER_SEC_TAG,
                      MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
                     ca_certificate,
-                    sizeof(ca_certificate) - 1);
+                    sizeof(ca_certificate));
         LOG_INF("Comparing credentials: %s", err ? "Mismatch" : "Match");
         if (!err) {
             return 0;
@@ -90,7 +91,7 @@ int certificate_provision(void)
     err = modem_key_mgmt_write(CONFIG_MQTT_HELPER_SEC_TAG,
                    MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
                    ca_certificate,
-                   sizeof(ca_certificate) - 1);
+                   sizeof(ca_certificate));
     if (err) {
         LOG_ERR("Failed to provision CA certificate: %d", err);
         return err;
@@ -344,23 +345,6 @@ int main(void)
         LOG_ERR("Failed to initialize the buttons library, error: %d", err);
         return 0;
     }
-    
-    /* --- 1. TIME SYNC WITH TIMEOUT --- */
-    LOG_INF("Waiting for network time to validate TLS certificate...");
-    for (int i = 0; i < 60; i++) {
-        if (date_time_is_valid()) {
-            LOG_INF("Time synced successfully!");
-            break;
-        }
-        k_sleep(K_MSEC(500));
-    }
-
-    if (!date_time_is_valid()) {
-        LOG_WRN("Failed to get network time! TLS handshake might fail with -111.");
-    }
-		char buf;
-nrf_modem_at_cmd(buf, sizeof(buf), "AT+CGMR");
-LOG_INF("Modem Firmware: %s", buf);
 
     /* --- 2. MQTT INITIALIZATION --- */
     struct mqtt_helper_cfg config = {
@@ -395,7 +379,7 @@ LOG_INF("Modem Firmware: %s", buf);
         .password.ptr = CONFIG_LR_MQTT_PASSWORD,
         .password.size = strlen(CONFIG_LR_MQTT_PASSWORD),
     };
-
+int verify = 0; // TLS_PEER_VERIFY_NONE (for testing) or just disable hostname check
     err = mqtt_helper_connect(&conn_params);
     if (err) {
         LOG_ERR("Failed to connect to MQTT, error code: %d", err);

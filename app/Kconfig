@@ -1,29 +1,14 @@
-#
-# Copyright (c) 2020 Nordic Semiconductor ASA
-#
-# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
-#
-
-menu "Cellfund Lesson 4 Exercise"
-
-config MQTT_SAMPLE_PUB_TOPIC
-    string "MQTT publish topic"
-    default "devacademy/publish/topic"
-
-config MQTT_SAMPLE_SUB_TOPIC
-    string "MQTT subscribe topic"
-    default "devacademy/subscribe/topic"
+menu "PIGLR MQTT Config"
 
 config MQTT_SAMPLE_CLIENT_ID
     string "MQTT Client ID"
+    default ""
     help
-      Use a custom Client ID string. If not set, the client ID will be
-      generated based on the IMEI number (for nRF91 Series based targets) or
-      randomly (for other platforms).
+      If empty, client ID will be generated from IMEI (nRF91).
 
 config MQTT_SAMPLE_BROKER_HOSTNAME
     string "MQTT broker hostname"
-    default "mqtt.nordicsemi.academy"
+    default "piglr.duckdns.org"
 
 config LR_MQTT_USERNAME
     string "MQTT username"
@@ -32,6 +17,18 @@ config LR_MQTT_USERNAME
 config LR_MQTT_PASSWORD
     string "MQTT password"
     default ""
+
+config PAIR_ID
+    string "Pair ID"
+    default "P123"
+
+config MY_ID
+    string "My device ID"
+    default "devA"
+
+config PEER_ID
+    string "Peer device ID"
+    default "devB"
 
 endmenu
 

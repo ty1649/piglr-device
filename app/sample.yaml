@@ -1,19 +1,14 @@
 sample:
-  description: Cellular IoT Fundamentals Course by Nordic Developer Academy (https://academy.nordicsemi.com/)
-  name: Cellular IoT Fundamentals Course - Lesson 4 Exercise 2 
-  
-common: 
-    sysbuild: true
-    build_only: true
-    skip: true
-    integration_platforms: 
-      - nrf9151dk/nrf9151/ns
-      - nrf9161dk/nrf9161/ns
-      - nrf9160dk/nrf9160/ns
-      - thingy91x/nrf9151/ns
-      - thingy91/nrf9160/ns
-    platform_exclude:
-      - native_sim
-    
+  description: "PIGLR: LTE+GNSS peer locator prototype"
+  name: "PIGLR MQTT Golden Loop"
+
+common:
+  sysbuild: false
+  integration_platforms:
+    - nrf9160dk/nrf9160/ns
+    - nrf9161dk/nrf9161/ns
+    - nrf9151dk/nrf9151/ns
+
 tests:
-  cell_fund.l4.e2: {}
+  amulet.golden_loop:
+    build_only: true

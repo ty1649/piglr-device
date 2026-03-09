@@ -20,15 +20,15 @@ config LR_MQTT_PASSWORD
 
 config PAIR_ID
     string "Pair ID"
-    default "P123"
+    default "pigpair-001"
 
 config MY_ID
     string "My device ID"
-    default "devA"
+    default "pigdev-001"
 
 config PEER_ID
     string "Peer device ID"
-    default "devB"
+    default "pigdev-002"
 
 endmenu
 
